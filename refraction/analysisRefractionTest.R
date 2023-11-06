@@ -377,6 +377,16 @@ nmisd[15]<-sd(nmi)
 #The next idea is to identify groups of students that "load" on each of the
 #clusters found. First we create a similarity network of students.
 #YOU DO NOT NEED TO UNDERSTAND THIS:
+
+n_cores<-detectCores()-1 #this is the number of cores we'll use
+cl <- makeCluster(n_cores)  
+registerDoParallel(cl)   #use doParallel package to engage the cores we want to use
+
+n<-length(stud)
+SimMatRef<-matrix(0,nrow=n,ncol=n)
+diag(SimMatRef)<-1
+time<-vector()
+
 x<-colSums(ref,na.rm=T)/length(stud)
 y<--log2(x)
 refSim<-ref
@@ -384,6 +394,7 @@ for(i in 1:length(x)){
   refSim[which(refSim[,i]==1),i]<-y[i]
   
 }
+
 
 simStudij<-function(i,j){
   overlap<-ref[i,]*ref[j,]
@@ -394,6 +405,23 @@ simStudij<-function(i,j){
   return(sim)
   
 }
+## PARALLEL
+SimMat<-matrix(0,nrow=n,ncol=n)
+time<-vector()
+for(k in 1:n-1){
+  ptm<-proc.time()
+  simVec<-vector()
+  
+  
+  simVec<-foreach (i=(k+1):n, .combine=c) %dopar% {
+    simStudij(k,i)
+  }
+  
+  SimMat[(k+1):n,k]<-simVec
+  time[k]<-(proc.time()-ptm)[3]
+  time[k]
+}
+
 
 simStudk<-function(k){
   simVec<-vector()
@@ -403,15 +431,45 @@ simStudk<-function(k){
   return(simVec)
 }
 
+time<-vector()
+ptm<-proc.time()
+simStudk(1)
+time[1]<-(proc.time()-ptm)[3]
+time[1]
+
+
 simMatrix<-matrix(data=0,ncol=length(stud),nrow=length(stud))
 for(i in 1:length(stud)){
   simMatrix[,i]<-simStudk(i)  
   
 }
 
+
+write.csv(simMatrix,"simMatrix.csv")
 sm<-read.csv("simMatrix.csv")
 simMatrix<-as.matrix(sm[,-1])
-s<-graph.adjacency(simMatrix,diag=F,weighted=T)
+s<-graph.adjacency(SimMat,diag=F,weighted=T)
+
+source("functions/F_hat.r")
+timeL<-vector()
+LANSMatRef<-matrix(0,nrow=n,ncol=n)
+for(k in 1:n){
+  ptm<-proc.time()
+  LANSMatRef[,k]<-F_hatPar(SimMat[,k])
+  timeL[k]<-(proc.time()-ptm)[3]
+  print(c(k,timeL[k]))
+}
+
+write.csv(LANSMatRef,"LANSMatRef.csv")
+
+alpha<-0.001
+sigMat<-LANSMatRef >= 1 - alpha
+mode(sigMat)<-"numeric"
+sigMat[is.na(sigMat)] <- 0
+SimMatBB<-sigMat*SimMat
+
+sBB<-graph.adjacency(SimMatBB,diag=F,weighted=T,mode = "lower")
+V(sBB)$id<-stud
 V(s)$id<-stud
 sBB<-backboneNetwork(s,0.05,2)
 length(stud)
