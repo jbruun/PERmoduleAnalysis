@@ -10,7 +10,7 @@
 library(igraph)
 source("functions/backboneExtraction.R")
 ref<-read.csv("data/refraction.csv")
-
+studAtt<-read.csv("data/studentAttributes.csv")
 #In BBB2016, we found that particular answers were very popular. They provided a very strong signal,
 #which turned out to obscure the underlying community structure and had to be removed. In this
 #first part of the current analysis, we try to find a threshold frequency for the selection of answers
@@ -39,13 +39,16 @@ AdjMat<-matrix(data=0,ncol=dimM,nrow=dimM)
 
 colnames(AdjMat)<-c(stud,questions)
 AdjMat[1:length(stud),(length(stud)+1):dimM]<-as.matrix(ref)
-g<-graph.adjacency(AdjMat,mode = "upper") #This is the bipartite network
+g<-graph.adjacency(AdjMat) #This is the bipartite network
+V(g)$id<-V(g)$name
+write.graph(g,"bipartiteRefraction.net",format="pajek")
 
-#The first 1366 nodes in g are students. The remaining nodes represent the quesions. 
+#The first 1366 nodes in g are students. The remaining nodes represent the questions. 
 #We now plot the frequencies of questions. 
 dd<-degree(g)
 V(g)$freq<-dd
-plot(dd[1369:length(dd)]/1369)
+plot(dd[1369:length(dd)]/1369, ylab="selection frequency",xlab="item number")
+abline(h=0.5)
 #Some answers are chosen with a very high frequency, and we now search for 
 #the threshold. We do this by running the following anlaysis until we
 #can observe comunity structure in the questions. First, collapse the bipartite network 
@@ -374,37 +377,37 @@ nmisd[15]<-sd(nmi)
 #The next idea is to identify groups of students that "load" on each of the
 #clusters found. First we create a similarity network of students.
 #YOU DO NOT NEED TO UNDERSTAND THIS:
-#x<-colSums(ref,na.rm=T)/length(stud)
-#y<--log2(x)
-#refSim<-ref
-#for(i in 1:length(x)){
- # refSim[which(refSim[,i]==1),i]<-y[i]
+x<-colSums(ref,na.rm=T)/length(stud)
+y<--log2(x)
+refSim<-ref
+for(i in 1:length(x)){
+  refSim[which(refSim[,i]==1),i]<-y[i]
   
-#}
+}
 
-#simStudij<-function(i,j){
-  #overlap<-ref[i,]*ref[j,]
-  #Infoverlap<-sum(y[which(overlap==1)])
-  #Infi<-sum(y[which(ref[i,]==1)])
-  #Infj<-sum(y[which(ref[j,]==1)])
-  #sim<-2*Infoverlap/(Infi+Infj)
-  #return(sim)
+simStudij<-function(i,j){
+  overlap<-ref[i,]*ref[j,]
+  Infoverlap<-sum(y[which(overlap==1)])
+  Infi<-sum(y[which(ref[i,]==1)])
+  Infj<-sum(y[which(ref[j,]==1)])
+  sim<-2*Infoverlap/(Infi+Infj)
+  return(sim)
   
-#}
+}
 
-#simStudk<-function(k){
- # simVec<-vector()
-  #for(i in 1:length(ref[,1])){
-   # simVec[i]<-simStudij(k,i)
-  #}
-  #return(simVec)
-#}
+simStudk<-function(k){
+  simVec<-vector()
+  for(i in 1:length(ref[,1])){
+    simVec[i]<-simStudij(k,i)
+  }
+  return(simVec)
+}
 
-#simMatrix<-matrix(data=0,ncol=length(stud),nrow=length(stud))
-#for(i in 1:length(stud)){
- # simMatrix[,i]<-simStudk(i)  
+simMatrix<-matrix(data=0,ncol=length(stud),nrow=length(stud))
+for(i in 1:length(stud)){
+  simMatrix[,i]<-simStudk(i)  
   
-#}
+}
 
 sm<-read.csv("simMatrix.csv")
 simMatrix<-as.matrix(sm[,-1])
